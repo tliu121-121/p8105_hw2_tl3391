@@ -1,0 +1,268 @@
+---
+title: "hw2"
+author: "Tong Liu"
+date: "2025-10-01"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##load packages
+```{r}
+library(tidyverse)
+library(tidyr)
+library(readr)
+library(janitor)
+library(lubridate)
+```
+###Question1
+
+##Read in the pols data
+```{r}
+pols_month = read_csv("data/pols-month.csv") %>%
+  clean_names()
+unemployment = read_csv("data/unemployment.csv") %>%
+  clean_names()
+snp = read_csv("data/snp.csv") %>%
+  clean_names()
+```
+##Clean the pol_month dataset
+```{r}
+pols_clean = pols_month %>%
+  separate(mon, into = c("year","month","day")) %>%
+  mutate(
+    day = as.numeric(day),
+    month = as.numeric(month),
+    year = as.numeric(year),
+    month = month(month, label = TRUE, abbr = FALSE),
+    president = if_else(prez_gop == 1, "gop", "dem")
+  ) %>%
+  select(-day, -prez_gop, -prez_dem)
+```
+
+##Clean the snp dataset
+```{r}
+snp_clean = snp %>%
+  mutate(date = mdy(date)) %>%
+  transmute(
+    year  = year(date),
+    month = month(date, label = TRUE, abbr = FALSE),
+    close
+  ) %>%
+  arrange(year, month, close)
+```
+
+##Clean the unemployment dataset
+```{r}
+unemployment_clean = unemployment %>%
+  pivot_longer(
+    cols = jan:dec,
+    names_to = "month",
+    values_to = "unemployment"
+  ) %>%
+  mutate(
+    month = match(month, tolower(month.abb)),
+    month = month(month, label = TRUE, abbr = FALSE)
+  ) %>%
+  select(year, month, unemployment)
+
+```
+
+##Merge the datasets
+```{r}
+result = pols_clean %>%
+  left_join(snp_clean,  by = c('year','month')) %>%
+  left_join(unemployment_clean, by = c('year','month'))
+```
+
+
+##Report datasets
+Cleaned datasets
+```{r}
+dim(pols_clean)
+dim(snp_clean)
+dim(unemployment_clean)
+range(pols_clean$year)
+range(snp_clean$year)
+range(unemployment_clean$year)
+names(pols_clean)
+names(snp_clean)
+names(unemployment_clean)
+```
+The pols_month dataset's dimension is 822*9, and the variable year ranging from 1948 to 2015. It contains key variables including year,
+month, gov_gop, sen_gop,rep_gop,gov_dem,sen_dem,rep_dem, and president.
+
+The snp dataset's dimension is 787*3, and the variable year ranging from 1969 to 2068. It contain key variables including year, month, and
+close, which is the closing values of the S&P stock index on the associated date.
+
+The unemployment dataset's dimension is 816*3, and the variable year ranging from 1948 to 2015. It contains key variables including year, 
+month, and unemployment, which is the  percentage of unemployment.
+
+Merged dataset
+```{r}
+dim(result)
+range(result$year)
+names(result)
+```
+The merged dataset's dimension is 822*11 because we merged the duplicate year and month in the snp and unemployment dataset, which gave us
+9+1+1 = 11 columns. The ranging if variable year goes from 1947 to 2015. It contains key variables including year, month, gov_gop, sen_gop,rep_gop,gov_dem,sen_dem,rep_dem, and president, close
+and unemployment.
+
+
+###Question 2
+
+##Read in the mr trash wheel dataset
+```{r}
+mr_data = readxl::read_excel("./data/202509 Trash Wheel Collection Data.xlsx",
+  sheet = "Mr. Trash Wheel",                 
+  range = "A2:N709")
+```
+
+##Clean the mr trash wheel dataset
+```{r}
+mr_clean = mr_data %>%
+  janitor::clean_names() %>%
+  filter(!is.na(dumpster)) %>%
+  mutate(
+    year = as.numeric(year),
+    date = as_date(date),
+    sports_balls = as.integer(sports_balls)
+    )
+```
+
+##Read in the professor trash wheel dataset
+```{r}
+prof_data = readxl::read_excel("./data/202509 Trash Wheel Collection Data.xlsx",
+  sheet = "Professor Trash Wheel",
+  range = "A2:M134")
+```
+
+##Clean the professor trash wheel dataset
+```{r}
+prof_clean = prof_data %>%
+  janitor::clean_names() %>%
+  filter(!is.na(dumpster))
+```
+
+##Read in the Gwynns trash wheel dataset
+```{r}
+gwyn_data = readxl::read_excel("./data/202509 Trash Wheel Collection Data.xlsx",
+  sheet = "Gwynns Falls Trash Wheel",
+  range = "A2:L351")
+```
+
+##Clean the Gwynns trash wheel dataset
+```{r}
+gwyn_clean = gwyn_data %>%
+  janitor::clean_names() %>%
+  filter(!is.na(dumpster))
+```
+
+##Combine datasets
+```{r}
+wheel = bind_rows(mr_clean, prof_clean,gwyn_clean) %>%
+  select(dumpster, year, month, date, everything())
+```
+
+##Calculate for total weight of trash collected by professor trash wheel and total number of cigeratte butts collected by Gwynnda in June 2022
+```{r}
+prof_total_weight = prof_clean %>%
+  summarise(total_tons = sum(weight_tons, na.rm = TRUE))
+gwyn_cig_June2022 = gwyn_clean %>%
+  filter(month == "June" & year == 2022) %>%
+  summarise(total_cig_butts = sum(cigarette_butts, na.rm = TRUE))
+```
+
+##Description and report for the calculation result
+The combined Trash Wheel dataset has `r nrow(wheel)` rows and 
+`r ncol(wheel)` columns. The variables include:
+
+`r paste(names(wheel), collapse = ", ")`.
+
+The dataset spans from `r min(wheel$date, na.rm = TRUE)` to 
+`r max(wheel$date, na.rm = TRUE)`.
+
+The total weight of trash collected by Professor Trash Wheel was `r round(pull(prof_total_weight), 2)` tons.  
+
+The total number of cigarette butts collected by Gwynnda in June 2022 was `r format(pull(gwyn_cig_June2022), big.mark = ",")`.
+
+###Question 3
+
+##import the dataset
+```{r}
+zori_data = read_csv("data/Zip_zori_uc_sfrcondomfr_sm_month_NYC.csv") %>%
+  janitor::clean_names() 
+zip_data = read_csv("data/Zip Codes.csv") %>%
+  janitor::clean_names() %>%
+  mutate(
+    region_name = zip_code,
+    county_name = paste0(county, " County")
+  )
+```
+
+##Merge two datasets
+```{r}
+zillow_full = left_join(zori_data,zip_data,by = c("county_name","region_name")) %>%
+  select(size_rank, region_id, region_name, region_type, zip_code,state, state_name, state_fips, city, metro,
+    county, county_name, county_code, county_fips,neighborhood, file_date,everything())
+```
+
+##Clean the merged dataset
+```{r}
+zillow_clean = zillow_full %>%
+  pivot_longer(
+    col = x2015_01_31:x2024_08_31,
+    values_to = "rent",
+    names_to = "date") %>%
+  mutate(
+    date = substr(date, start = 2, stop = 11),
+    date = as_date(date)
+  )
+```
+
+##Summaerization of the dataset
+```{r}
+summary(zillow_clean)
+```
+##Summarization continued
+```{r}
+n_obs = nrow(zillow_clean)
+n_vars = ncol(zillow_clean)
+n_zip = n_distinct(zillow_clean$zip_code)
+n_hood = n_distinct(zillow_clean$neighborhood)
+var_names = names(zillow_clean)
+```
+There are 17284 observations in total in the dateset. An there are 18 variables, which are "size_rank","region_id","region_name", "region_type","zip_code","state","state_name","state_fips","city","metro","county","county_name",county_code","county_fips","neighborhood", "file_date","date",and "rent". It also contains 43 distinct neighborhoods and 149 distinct zip codes.
+
+##Find ZIP codes appear in the ZIP code dataset but not in the Zillow Rental Price dataset
+```{r}
+missing_zips = anti_join(zip_data, zillow_clean, by = "zip_code")
+missing_zip_codes = unique(missing_zips$zip_code)
+head(missing_zip_codes)
+```
+There are `r length(missing_zip_codes)` ZIP codes that appear in the ZIP code dataset but not in the Zillow dataset. This might occur because some zip codes have insufficient rental data, or becasue some of them were created recently and was not added to the dataset.
+
+##compare rental prices in January 2021 to prices in January 2020.
+```{r}
+zillow_compare = zillow_clean %>%
+  filter(date %in% ymd(c("2020-01-31", "2021-01-31"))) %>%
+  select(zip_code, county_name, neighborhood, date, rent) %>%
+  tidyr::pivot_wider(
+    names_from = date,
+    values_from = rent,
+    names_glue = "rent_{format(date, '%Y_%m_%d')}"
+  ) %>%
+  mutate(
+    drop_in_price = rent_2020_01_31 - rent_2021_01_31
+  ) %>%
+  arrange(desc(drop_in_price)) %>%
+  slice(1:10) %>%
+  select(zip_code, county_name, neighborhood, drop_in_price)
+print(zillow_compare, n = 10)
+```
+The table above shows the 10 ZIP codes with the largest decline in rental prices between January 2020 and January 2021.The top 10 ZIP codes with the largest rent declines from January 2020 to January 2021 are all in New York County. The sharpest drop was in 10007 with about 913 units.
+
+
